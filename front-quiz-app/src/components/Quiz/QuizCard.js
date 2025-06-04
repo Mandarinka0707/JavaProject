@@ -1,11 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import '/Users/darinautalieva/Desktop/JavaProject/front-quiz-app/src/styles.css';
+import '../../styles/styles.css';
 
 const QuizCard = ({ quiz }) => {
-  const [comments, setComments] = useState([]);
-  const [newComment, setNewComment] = useState('');
-
   const renderRatingStars = () => {
     const rating = quiz.rating || 0;
     return (
@@ -23,14 +20,6 @@ const QuizCard = ({ quiz }) => {
     );
   };
 
-  const handleCommentSubmit = (e) => {
-    e.preventDefault();
-    if (newComment.trim()) {
-      setComments([...comments, newComment]);
-      setNewComment('');
-    }
-  };
-
   return (
     <div className="quiz-card">
       <div className="card-header">
@@ -46,30 +35,17 @@ const QuizCard = ({ quiz }) => {
       <h3 className="quiz-title">{quiz.title}</h3>
       <p className="quiz-description">{quiz.description}</p>
 
+      <div className="tags-list">
+        {quiz.tags && quiz.tags.map((tag, index) => (
+          <span key={index} className="tag">#{tag}</span>
+        ))}
+      </div>
+
       <div className="card-footer">
         {renderRatingStars()}
         <Link to={`/quiz/${quiz.id}`} className="start-button">
           Начать
         </Link>
-      </div>
-
-      <div className="comments-section">
-        <h3>Comments</h3>
-        <form onSubmit={handleCommentSubmit}>
-          <input
-            type="text"
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Add a comment..."
-            className="comment-input"
-          />
-          <button type="submit" className="comment-submit">Submit</button>
-        </form>
-        <div className="comments-list">
-          {comments.map((comment, index) => (
-            <p key={index}>{comment}</p>
-          ))}
-        </div>
       </div>
     </div>
   );

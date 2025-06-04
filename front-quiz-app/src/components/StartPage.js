@@ -1,6 +1,6 @@
 // components/StartPage.js
 import { useNavigate } from 'react-router-dom';
-import '/Users/darinautalieva/Desktop/JavaProject/front-quiz-app/src/styles.css';
+import '../styles/styles.css';
 
 const StartPage = () => {
   const navigate = useNavigate();

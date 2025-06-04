@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import '/Users/darinautalieva/Desktop/JavaProject/front-quiz-app/src/styles.css';
+import '../../styles/styles.css';
 const QuizRating = ({ quizId, initialRating = 0, initialRatingCount = 0, isCompleted = false }) => {
   const [rating, setRating] = useState(initialRating || 0);
   const [ratingCount, setRatingCount] = useState(initialRatingCount || 0);

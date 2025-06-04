@@ -1,47 +1,131 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import '/Users/darinautalieva/Desktop/JavaProject/front-quiz-app/src/styles.css';
+import { useState, useEffect } from 'react';
+import { getMyQuizzes, getCompletedQuizzes } from '../../services/quizService';
+import '../../styles/styles.css';
 
-const ProfilePage = ({
-    userQuizzes = [],
-    completedQuizzes = [],
-    userStats = {},
-    friends = [],
-    friendActivity = [],
-    chats = [],
-    onAddFriend = (userId) => {
-      console.log(`Добавление пользователя с ID ${userId} в друзья`);
-    },
-    onRemoveFriend = (friendId) => {
-      console.log(`Удаление пользователя с ID ${friendId} из друзей`);
+const ProfilePage = () => {
+  const navigate = useNavigate();
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [feedPosts, setFeedPosts] = useState([]);
+  const [newPostText, setNewPostText] = useState('');
+  const [userQuizCount, setUserQuizCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [completedQuizzes, setCompletedQuizzes] = useState([]);
+  const [userStats, setUserStats] = useState({ overallRating: 0 });
+  const [friends, setFriends] = useState([]);
+  const [publishedResults, setPublishedResults] = useState([]);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        setLoading(true);
+        const [quizzes, completed] = await Promise.all([
+          getMyQuizzes(),
+          getCompletedQuizzes()
+        ]);
+        setUserQuizCount(quizzes.length);
+        setCompletedQuizzes(completed);
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        setError('Ошибка при загрузке данных пользователя');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  useEffect(() => {
+    const savedPosts = localStorage.getItem('feedPosts');
+    if (savedPosts) {
+      setFeedPosts(JSON.parse(savedPosts));
     }
-  }) => {
-    const navigate = useNavigate();
-    const [showAddFriendModal, setShowAddFriendModal] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
-    const [activeTab, setActiveTab] = useState('friends');
+  }, []);
 
-    const handleSearchFriends = (e) => {
-      e.preventDefault();
-      const mockResults = [
-        { id: 101, name: 'Алексей Петров', avatar: '', commonFriends: 3 },
-        { id: 102, name: 'Мария Иванова', avatar: '', commonFriends: 5 },
-        { id: 103, name: 'Дмитрий Смирнов', avatar: '', commonFriends: 2 }
-      ];
-      setSearchResults(mockResults.filter(user =>
-        user.name.toLowerCase().includes(searchQuery.toLowerCase())
-      ));
-    };
+  useEffect(() => {
+    localStorage.setItem('feedPosts', JSON.stringify(feedPosts));
+  }, [feedPosts]);
 
-    const handleAddFriend = (userId) => {
-      onAddFriend(userId);
-      setSearchResults(searchResults.filter(user => user.id !== userId));
+  const addToFeed = (quizResult) => {
+    const newPost = {
+      id: Date.now(),
+      ...quizResult,
+      date: new Date().toISOString(),
+      likes: 0,
+      comments: [],
+      shares: 0
     };
+    setFeedPosts([newPost, ...feedPosts]);
+    setNewPostText('');
+  };
 
-    const handleRemoveFriend = (friendId) => {
-      onRemoveFriend(friendId);
-    };
+  const handleSearchFriends = (e) => {
+    e.preventDefault();
+    const mockResults = [
+      { id: 101, name: 'Алексей Петров', avatar: '', commonFriends: 3 },
+      { id: 102, name: 'Мария Иванова', avatar: '', commonFriends: 5 },
+      { id: 103, name: 'Дмитрий Смирнов', avatar: '', commonFriends: 2 }
+    ];
+    setSearchResults(mockResults.filter(user =>
+      user.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ));
+  };
+
+  const handleAddFriend = (userId) => {
+    // Implement the logic to add a friend
+    console.log(`Adding friend ${userId}`);
+    setSearchResults(searchResults.filter(user => user.id !== userId));
+  };
+
+  const handleRemoveFriend = (friendId) => {
+    // Implement the logic to remove a friend
+    console.log(`Removing friend ${friendId}`);
+  };
+
+  const handleLikePost = (postId) => {
+    setFeedPosts(feedPosts.map(post =>
+      post.id === postId ? {...post, likes: post.likes + 1} : post
+    ));
+  };
+
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}м ${remainingSeconds}с`;
+  };
+
+  const formatPosition = (position) => {
+    if (!position) return '-';
+    if (position === 1) return '1-е';
+    if (position === 2) return '2-е';
+    if (position === 3) return '3-е';
+    return `${position}-е`;
+  };
+
+  if (loading) {
+    return (
+      <div className="profile-container">
+        <div className="loading-message">Загрузка профиля...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="profile-container">
+        <div className="error-message">
+          {error}
+          <button onClick={() => window.location.reload()} className="retry-button">
+            Попробовать снова
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="profile-container">
@@ -58,12 +142,173 @@ const ProfilePage = ({
         </div>
         <div className="stat-card">
           <h3>Создано викторин</h3>
-          <div className="stat-value">{userQuizzes.length}</div>
+          <div className="stat-value">{userQuizCount}</div>
+          <Link to="/my-quizzes" className="view-all-link">Посмотреть все</Link>
+        </div>
+        <div className="stat-card">
+          <h3>Средний результат</h3>
+          <div className="stat-value">
+            {completedQuizzes.length > 0
+              ? Math.round(
+                  completedQuizzes.reduce((acc, quiz) => 
+                    acc + (quiz.score / quiz.totalQuestions) * 100, 0
+                  ) / completedQuizzes.length
+                )
+              : 0}%
+          </div>
         </div>
         <div className="stat-card">
           <h3>Друзей</h3>
           <div className="stat-value">{friends.length}</div>
         </div>
+      </div>
+
+      <div className="activity-feed">
+        <h2>Моя лента</h2>
+
+        <div className="new-post-card">
+          <textarea
+            placeholder="Поделитесь своими достижениями..."
+            value={newPostText}
+            onChange={(e) => setNewPostText(e.target.value)}
+            className="post-input"
+          />
+          <button
+            className="share-button"
+            onClick={() => addToFeed({
+              text: newPostText,
+              score: 0,
+              total: 0,
+              type: 'manual'
+            })}
+          >
+            Опубликовать
+          </button>
+        </div>
+
+        {publishedResults.map((result) => (
+          <div key={result.id} className="feed-post published-result">
+            <div className="post-header">
+              <img
+                src="/default-avatar.png"
+                alt="Аватар"
+                className="user-avatar"
+              />
+              <div className="post-info">
+                <h4>{userStats.username || 'Пользователь'}</h4>
+                <time>
+                  {new Date(result.date).toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'long',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </time>
+              </div>
+            </div>
+            <div className="post-content">
+              <h3>Результат викторины: {result.title}</h3>
+              <div className="quiz-stats">
+                <span>Правильных ответов: {result.score}/{result.total}</span>
+                <span>Процент: {Math.round((result.score/result.total)*100)}%</span>
+                {result.time && <span>Время: {result.time} сек</span>}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {feedPosts.map(post => (
+          <div key={post.id} className="feed-post">
+            <div className="post-header">
+              <img
+                src="/default-avatar.png"
+                alt="Аватар"
+                className="user-avatar"
+              />
+              <div className="post-info">
+                <h4>{userStats.username || 'Пользователь'}</h4>
+                <time>
+                  {new Date(post.date).toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'long',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </time>
+              </div>
+              <button
+                className="delete-post"
+                onClick={() => setFeedPosts(feedPosts.filter(p => p.id !== post.id))}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="post-content">
+              {post.quizId && (
+                <Link to={`/quiz/${post.quizId}`} className="quiz-link">
+                  <h3>{post.title}</h3>
+                  <div className="quiz-stats">
+                    <span>Результат: {post.score}/{post.total}</span>
+                    <span>Процент: {Math.round((post.score/post.total)*100)}%</span>
+                  </div>
+                </Link>
+              )}
+              {post.text && <p className="post-text">{post.text}</p>}
+            </div>
+
+            <div className="post-actions">
+              <button
+                className="like-button"
+                onClick={() => handleLikePost(post.id)}
+              >
+                ♡ {post.likes}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="completed-quizzes">
+        <h2>Пройденные викторины</h2>
+        {completedQuizzes.length === 0 ? (
+          <div className="empty-state">
+            <p>Вы еще не прошли ни одной викторины</p>
+            <Link to="/quizzes" className="primary-button">
+              Найти викторину
+            </Link>
+          </div>
+        ) : (
+          <div className="quizzes-grid">
+            {completedQuizzes.map(quiz => (
+              <div key={quiz.attemptId} className="quiz-card completed">
+                <h3>{quiz.quizTitle}</h3>
+                <div className="quiz-stats">
+                  <span>Лучший результат: {quiz.score}/{quiz.totalQuestions}</span>
+                  <span>Процент: {Math.round((quiz.score/quiz.totalQuestions)*100)}%</span>
+                </div>
+                <div className="quiz-meta">
+                  <span>Время: {formatTime(quiz.timeSpent)}</span>
+                  {quiz.position && (
+                    <span className="position">Место: {formatPosition(quiz.position)}</span>
+                  )}
+                </div>
+                <div className="quiz-actions">
+                  <Link to={`/quiz/${quiz.quizId}`} className="retry-link">
+                    Пройти снова
+                  </Link>
+                  <span className="attempt-date">
+                    {new Date(quiz.endTime).toLocaleDateString('ru-RU', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {showAddFriendModal && (
@@ -123,206 +368,6 @@ const ProfilePage = ({
           </div>
         </div>
       )}
-
-      <div className="profile-tabs">
-        <button
-          className={`tab-button ${activeTab === 'friends' ? 'active' : ''}`}
-          onClick={() => setActiveTab('friends')}
-        >
-          Друзья
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'chats' ? 'active' : ''}`}
-          onClick={() => setActiveTab('chats')}
-        >
-          Чаты
-        </button>
-      </div>
-
-      {activeTab === 'friends' && (
-        <div className="friends-section">
-          <div className="section-header">
-            <h2>Мои друзья</h2>
-            <button
-              className="add-friend-button"
-              onClick={() => setShowAddFriendModal(true)}
-            >
-              + Добавить друга
-            </button>
-          </div>
-
-          {friends.length === 0 ? (
-            <div className="empty-state">
-              <p>У вас пока нет друзей</p>
-              <button
-                className="primary-button"
-                onClick={() => setShowAddFriendModal(true)}
-              >
-                Найти друзей
-              </button>
-            </div>
-          ) : (
-            <div className="friends-grid">
-              {friends.map(friend => (
-                <div key={friend.id} className="friend-card">
-                  <div className="friend-main">
-                    <div className="friend-avatar-container">
-                      <img
-                        src={friend.avatar || '/default-avatar.png'}
-                        alt={friend.name}
-                        className="friend-avatar"
-                      />
-                      {friend.isOnline && <span className="online-badge"></span>}
-                    </div>
-                    <div className="friend-details">
-                      <h4 className="friend-name">{friend.name}</h4>
-                      <p className="friend-status">
-                        {friend.isOnline ? 'Онлайн' : `Был(а) ${friend.lastSeen}`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="friend-actions">
-                    <button
-                      onClick={() => navigate(`/chat/${friend.id}`)}
-                      className="message-button"
-                    >
-                      Чат
-                    </button>
-                    <button
-                      onClick={() => handleRemoveFriend(friend.id)}
-                      className="remove-button"
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'chats' && (
-        <div className="chats-section">
-          <div className="section-header">
-            <h2>Мои чаты</h2>
-            <button
-              className="new-chat-button"
-              onClick={() => navigate('/new-chat')}
-            >
-              + Новый чат
-            </button>
-          </div>
-
-          {chats.length === 0 ? (
-            <div className="empty-state">
-              <p>У вас нет активных чатов</p>
-              <button
-                className="primary-button"
-                onClick={() => navigate('/friends')}
-              >
-                Начать общение
-              </button>
-            </div>
-          ) : (
-            <div className="chats-list">
-              {chats.map(chat => (
-                <div
-                  key={chat.id}
-                  className="chat-item"
-                  onClick={() => navigate(`/chat/${chat.id}`)}
-                >
-                  <div className="chat-avatar-container">
-                    <img
-                      src={chat.participant.avatar || '/default-avatar.png'}
-                      alt={chat.participant.name}
-                      className="chat-avatar"
-                    />
-                    {chat.participant.isOnline && <span className="online-badge"></span>}
-                  </div>
-                  <div className="chat-info">
-                    <div className="chat-header">
-                      <h4>{chat.participant.name}</h4>
-                      <span className="chat-time">
-                        {new Date(chat.lastMessageTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </span>
-                    </div>
-                    <p className="last-message">
-                      {chat.lastMessage || "Нет сообщений"}
-                    </p>
-                  </div>
-                  {chat.unreadCount > 0 && (
-                    <span className="unread-count">{chat.unreadCount}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="completed-quizzes">
-        <h2>Пройденные викторины</h2>
-        {completedQuizzes.length === 0 ? (
-          <div className="empty-state">
-            <p>Вы еще не прошли ни одной викторины</p>
-            <Link to="/quizzes" className="primary-button">
-              Найти викторину
-            </Link>
-          </div>
-        ) : (
-          <div className="quizzes-grid">
-            {completedQuizzes.slice(0, 4).map(quiz => (
-              <div key={quiz.id} className="quiz-card completed">
-                <h3>{quiz.title}</h3>
-                <div className="quiz-stats">
-                  <span>★ Ваш результат: {quiz.userRating}/5</span>
-                  <span>🏆 Место в рейтинге: {quiz.position}</span>
-                </div>
-                <div className="quiz-meta">
-                  <span>🕒 Лучшее время: {quiz.bestTime} сек</span>
-                  <span>📅 {new Date(quiz.date).toLocaleDateString()}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="my-quizzes">
-        <div className="section-header">
-          <h2>Мои викторины</h2>
-          <Link to="/create-quiz" className="create-quiz-button">
-            Создать новую
-          </Link>
-        </div>
-        {userQuizzes.length === 0 ? (
-          <div className="empty-state">
-            <p>Вы еще не создали ни одной викторины</p>
-            <Link to="/create-quiz" className="primary-button">
-              Создать первую
-            </Link>
-          </div>
-        ) : (
-          <div className="quizzes-grid">
-            {userQuizzes.slice(0, 4).map(quiz => (
-              <div key={quiz.id} className="quiz-card">
-                <h3>{quiz.title}</h3>
-                <p className="quiz-description">{quiz.description}</p>
-                <div className="quiz-meta">
-                    <span className={`difficulty-badge ${quiz.difficulty}`}>
-                        {quiz.difficulty}
-                    </span>
-                </div>
-                <div className="quiz-stats">
-                <div>★ Средний рейтинг: {quiz.rating?.toFixed(1) || 0}</div>
-                <div>Вопросов: {quiz.questions.length}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 };

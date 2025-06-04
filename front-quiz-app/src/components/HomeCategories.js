@@ -1,6 +1,6 @@
 // components/HomeCategories.js
 import { Link } from 'react-router-dom';
-import '/Users/darinautalieva/Desktop/JavaProject/front-quiz-app/src/styles.css';
+import '../styles/styles.css';
 
 const categories = [
   { id: 1, title: "Кино", icon: "🎬", color: "#FF6B6B" },

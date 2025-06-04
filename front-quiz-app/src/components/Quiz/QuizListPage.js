@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import QuizCard from './QuizCard';
-import '/Users/darinautalieva/Desktop/JavaProject/front-quiz-app/src/styles.css';
+import '../../styles/styles.css';
 
 const QuizListPage = ({ quizzes = [], filterByCategory }) => {
   const { categoryId } = useParams();
@@ -10,22 +10,47 @@ const QuizListPage = ({ quizzes = [], filterByCategory }) => {
   const [selectedTags, setSelectedTags] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
 
-  // Получаем уникальные теги из всех викторин
   useEffect(() => {
-    const tags = [...new Set(quizzes.flatMap(q => q.tags))];
+    // Собираем все уникальные теги из викторин
+    const tags = [...new Set(quizzes.flatMap(q => q.tags || []))];
     setAvailableTags(tags);
+    
+    // Отладочная информация
+    console.log('=== ОТЛАДКА ВИКТОРИН ===');
+    console.log(`Получено викторин: ${quizzes.length}`);
+    quizzes.forEach((quiz, index) => {
+      console.log(`\nВикторина ${index + 1}:`, {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        difficulty: quiz.difficulty,
+        tags: quiz.tags,
+        allProperties: quiz
+      });
+    });
   }, [quizzes]);
 
   const filteredQuizzes = quizzes.filter(quiz => {
-    const matchesCategory = !categoryId || quiz.categoryId === Number(categoryId);
-    const matchesSearch = quiz.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         quiz.description.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!quiz) {
+      console.log('Обнаружена пустая викторина!');
+      return false;
+    }
+
+    // Проверяем наличие обязательных полей
+    if (!quiz.title) {
+      console.log(`Викторина ID ${quiz.id}: отсутствует название`);
+      return false;
+    }
+
+    const matchesSearch = !searchTerm || 
+                         (quiz.title && quiz.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (quiz.description && quiz.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesDifficulty = selectedDifficulty === 'all' || 
                             quiz.difficulty === selectedDifficulty;
     const matchesTags = selectedTags.length === 0 || 
-                       selectedTags.every(tag => quiz.tags.includes(tag));
+                       (quiz.tags && selectedTags.every(tag => quiz.tags.includes(tag)));
 
-    return matchesCategory && matchesSearch && matchesDifficulty && matchesTags;
+    return matchesSearch && matchesDifficulty && matchesTags;
   });
 
   const handleTagToggle = tag => {
@@ -77,7 +102,6 @@ const QuizListPage = ({ quizzes = [], filterByCategory }) => {
           <QuizCard 
             key={quiz.id} 
             quiz={quiz} 
-            showDetails={true}
           />
         ))}
       </div>

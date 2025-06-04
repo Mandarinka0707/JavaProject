@@ -1,6 +1,6 @@
 // components/Chat.js
 import { useState, useEffect, useRef } from 'react';
-import '/Users/darinautalieva/Desktop/JavaProject/front-quiz-app/src/styles.css';
+import '../styles/styles.css';
 const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
