@@ -50,6 +50,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_URL, API_ENDPOINTS } from '../../config';
 import '../../styles/styles.css';
 
 const RegisterPage = () => {
@@ -64,7 +65,7 @@ const RegisterPage = () => {
     setError(''); // Очищаем предыдущие ошибки
     
     try {
-      const response = await fetch('http://localhost:8080/auth/register', {
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.AUTH.REGISTER}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,15 +73,19 @@ const RegisterPage = () => {
         body: JSON.stringify({ username, password, email }),
       });
       
-      const data = await response.json();
-      
       if (response.ok) {
         // Успешная регистрация
         navigate('/login');
       } else {
-        // Показываем ошибку от сервера
-        setError(data.message || 'Ошибка при регистрации');
-        console.error('Registration failed:', data.message);
+        // Пытаемся получить сообщение об ошибке
+        try {
+          const data = await response.json();
+          setError(data.message || 'Ошибка при регистрации');
+          console.error('Registration failed:', data.message);
+        } catch (jsonError) {
+          setError('Ошибка при регистрации');
+          console.error('Error parsing error response:', jsonError);
+        }
       }
     } catch (error) {
       setError('Ошибка сервера. Пожалуйста, попробуйте позже.');

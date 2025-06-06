@@ -1,10 +1,12 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { getMyQuizzes, getCompletedQuizzes } from '../../services/quizService';
+import { getUserRating } from '../../services/userService';
+import { getFriendCount } from '../../services/friendService';
 import '../../styles/styles.css';
+import '../../styles/profile.css';
 
 const ProfilePage = () => {
-  const navigate = useNavigate();
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -14,20 +16,26 @@ const ProfilePage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [completedQuizzes, setCompletedQuizzes] = useState([]);
-  const [userStats, setUserStats] = useState({ overallRating: 0 });
-  const [friends, setFriends] = useState([]);
-  const [publishedResults, setPublishedResults] = useState([]);
+  const [userRating, setUserRating] = useState(null);
+  const [friendCount, setFriendCount] = useState(0);
+  const [publishedResults] = useState([]);
+  const [activeTab, setActiveTab] = useState('feed');
 
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         setLoading(true);
-        const [quizzes, completed] = await Promise.all([
+        const [quizzes, completed, rating, friends] = await Promise.all([
           getMyQuizzes(),
-          getCompletedQuizzes()
+          getCompletedQuizzes(),
+          getUserRating(),
+          getFriendCount()
         ]);
+        
         setUserQuizCount(quizzes.length);
         setCompletedQuizzes(completed);
+        setUserRating(rating);
+        setFriendCount(friends);
       } catch (error) {
         console.error('Error fetching user data:', error);
         setError('Ошибка при загрузке данных пользователя');
@@ -76,14 +84,8 @@ const ProfilePage = () => {
   };
 
   const handleAddFriend = (userId) => {
-    // Implement the logic to add a friend
     console.log(`Adding friend ${userId}`);
     setSearchResults(searchResults.filter(user => user.id !== userId));
-  };
-
-  const handleRemoveFriend = (friendId) => {
-    // Implement the logic to remove a friend
-    console.log(`Removing friend ${friendId}`);
   };
 
   const handleLikePost = (postId) => {
@@ -97,15 +99,6 @@ const ProfilePage = () => {
     const remainingSeconds = seconds % 60;
     return `${minutes}м ${remainingSeconds}с`;
   };
-
-  const formatPosition = (position) => {
-    if (!position) return '-';
-    if (position === 1) return '1-е';
-    if (position === 2) return '2-е';
-    if (position === 3) return '3-е';
-    return `${position}-е`;
-  };
-
   if (loading) {
     return (
       <div className="profile-container">
@@ -134,11 +127,15 @@ const ProfilePage = () => {
       <div className="profile-stats">
         <div className="stat-card">
           <h3>Общий рейтинг</h3>
-          <div className="stat-value">★ {userStats.overallRating || 0}</div>
+          <div className="stat-value">
+            {userRating ? `${userRating.averageScore.toFixed(2)}%` : '0%'}
+          </div>
         </div>
         <div className="stat-card">
           <h3>Пройдено викторин</h3>
-          <div className="stat-value">{completedQuizzes.length}</div>
+          <div className="stat-value">
+            {userRating ? userRating.completedQuizzes : 0}
+          </div>
         </div>
         <div className="stat-card">
           <h3>Создано викторин</h3>
@@ -146,167 +143,236 @@ const ProfilePage = () => {
           <Link to="/my-quizzes" className="view-all-link">Посмотреть все</Link>
         </div>
         <div className="stat-card">
-          <h3>Средний результат</h3>
-          <div className="stat-value">
-            {completedQuizzes.length > 0
-              ? Math.round(
-                  completedQuizzes.reduce((acc, quiz) => 
-                    acc + (quiz.score / quiz.totalQuestions) * 100, 0
-                  ) / completedQuizzes.length
-                )
-              : 0}%
-          </div>
-        </div>
-        <div className="stat-card">
           <h3>Друзей</h3>
-          <div className="stat-value">{friends.length}</div>
+          <div className="stat-value">{friendCount}</div>
+          {friendCount > 0 && (
+            <Link to="/friends" className="view-all-link">Посмотреть всех</Link>
+          )}
         </div>
       </div>
 
-      <div className="activity-feed">
-        <h2>Моя лента</h2>
+      <div className="profile-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'feed' ? 'active' : ''}`}
+          onClick={() => setActiveTab('feed')}
+        >
+          Моя лента
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'quizzes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('quizzes')}
+        >
+          Пройденные викторины
+        </button>
+      </div>
 
-        <div className="new-post-card">
-          <textarea
-            placeholder="Поделитесь своими достижениями..."
-            value={newPostText}
-            onChange={(e) => setNewPostText(e.target.value)}
-            className="post-input"
-          />
-          <button
-            className="share-button"
-            onClick={() => addToFeed({
-              text: newPostText,
-              score: 0,
-              total: 0,
-              type: 'manual'
-            })}
-          >
-            Опубликовать
-          </button>
-        </div>
-
-        {publishedResults.map((result) => (
-          <div key={result.id} className="feed-post published-result">
-            <div className="post-header">
-              <img
-                src="/default-avatar.png"
-                alt="Аватар"
-                className="user-avatar"
+      <div className="tab-content">
+        {activeTab === 'feed' ? (
+          <div className="activity-feed">
+            <div className="new-post-card">
+              <textarea
+                placeholder="Поделитесь своими достижениями..."
+                value={newPostText}
+                onChange={(e) => setNewPostText(e.target.value)}
+                className="post-input"
               />
-              <div className="post-info">
-                <h4>{userStats.username || 'Пользователь'}</h4>
-                <time>
-                  {new Date(result.date).toLocaleDateString('ru-RU', {
-                    day: 'numeric',
-                    month: 'long',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </time>
-              </div>
-            </div>
-            <div className="post-content">
-              <h3>Результат викторины: {result.title}</h3>
-              <div className="quiz-stats">
-                <span>Правильных ответов: {result.score}/{result.total}</span>
-                <span>Процент: {Math.round((result.score/result.total)*100)}%</span>
-                {result.time && <span>Время: {result.time} сек</span>}
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {feedPosts.map(post => (
-          <div key={post.id} className="feed-post">
-            <div className="post-header">
-              <img
-                src="/default-avatar.png"
-                alt="Аватар"
-                className="user-avatar"
-              />
-              <div className="post-info">
-                <h4>{userStats.username || 'Пользователь'}</h4>
-                <time>
-                  {new Date(post.date).toLocaleDateString('ru-RU', {
-                    day: 'numeric',
-                    month: 'long',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </time>
-              </div>
               <button
-                className="delete-post"
-                onClick={() => setFeedPosts(feedPosts.filter(p => p.id !== post.id))}
+                className="share-button"
+                onClick={() => addToFeed({
+                  text: newPostText,
+                  score: 0,
+                  total: 0,
+                  type: 'manual'
+                })}
               >
-                ×
+                Опубликовать
               </button>
             </div>
 
-            <div className="post-content">
-              {post.quizId && (
-                <Link to={`/quiz/${post.quizId}`} className="quiz-link">
-                  <h3>{post.title}</h3>
-                  <div className="quiz-stats">
-                    <span>Результат: {post.score}/{post.total}</span>
-                    <span>Процент: {Math.round((post.score/post.total)*100)}%</span>
+            {publishedResults.map((result) => (
+              <div key={result.id} className="feed-post published-result">
+                <div className="post-header">
+                  <img
+                    src="/default-avatar.png"
+                    alt="Аватар"
+                    className="user-avatar"
+                  />
+                  <div className="post-info">
+                    <h4>{userRating.username || 'Пользователь'}</h4>
+                    <time>
+                      {new Date(result.date).toLocaleDateString('ru-RU', {
+                        day: 'numeric',
+                        month: 'long',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </time>
                   </div>
-                </Link>
-              )}
-              {post.text && <p className="post-text">{post.text}</p>}
-            </div>
-
-            <div className="post-actions">
-              <button
-                className="like-button"
-                onClick={() => handleLikePost(post.id)}
-              >
-                ♡ {post.likes}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="completed-quizzes">
-        <h2>Пройденные викторины</h2>
-        {completedQuizzes.length === 0 ? (
-          <div className="empty-state">
-            <p>Вы еще не прошли ни одной викторины</p>
-            <Link to="/quizzes" className="primary-button">
-              Найти викторину
-            </Link>
-          </div>
-        ) : (
-          <div className="quizzes-grid">
-            {completedQuizzes.map(quiz => (
-              <div key={quiz.attemptId} className="quiz-card completed">
-                <h3>{quiz.quizTitle}</h3>
-                <div className="quiz-stats">
-                  <span>Лучший результат: {quiz.score}/{quiz.totalQuestions}</span>
-                  <span>Процент: {Math.round((quiz.score/quiz.totalQuestions)*100)}%</span>
                 </div>
-                <div className="quiz-meta">
-                  <span>Время: {formatTime(quiz.timeSpent)}</span>
-                  {quiz.position && (
-                    <span className="position">Место: {formatPosition(quiz.position)}</span>
-                  )}
-                </div>
-                <div className="quiz-actions">
-                  <Link to={`/quiz/${quiz.quizId}`} className="retry-link">
-                    Пройти снова
-                  </Link>
-                  <span className="attempt-date">
-                    {new Date(quiz.endTime).toLocaleDateString('ru-RU', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </span>
+                <div className="post-content">
+                  <h3>Результат викторины: {result.title}</h3>
+                  <div className="quiz-stats">
+                    <span>Правильных ответов: {result.score}/{result.total}</span>
+                    <span>Процент: {Math.round((result.score/result.total)*100)}%</span>
+                    {result.time && <span>Время: {result.time} сек</span>}
+                  </div>
                 </div>
               </div>
             ))}
+
+            {feedPosts.map(post => (
+              <div key={post.id} className="feed-post">
+                <div className="post-header">
+                  <img
+                    src="/default-avatar.png"
+                    alt="Аватар"
+                    className="user-avatar"
+                  />
+                  <div className="post-info">
+                    <h4>{userRating.username || 'Пользователь'}</h4>
+                    <time>
+                      {new Date(post.date).toLocaleDateString('ru-RU', {
+                        day: 'numeric',
+                        month: 'long',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </time>
+                  </div>
+                  <button
+                    className="delete-post"
+                    onClick={() => setFeedPosts(feedPosts.filter(p => p.id !== post.id))}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="post-content">
+                  {post.quizId && (
+                    <Link to={`/quiz/${post.quizId}`} className="quiz-link">
+                      <h3>{post.title}</h3>
+                      <div className="quiz-stats">
+                        <span>Результат: {post.score}/{post.total}</span>
+                        <span>Процент: {Math.round((post.score/post.total)*100)}%</span>
+                      </div>
+                    </Link>
+                  )}
+                  {post.text && <p className="post-text">{post.text}</p>}
+                </div>
+
+                <div className="post-actions">
+                  <button
+                    className="like-button"
+                    onClick={() => handleLikePost(post.id)}
+                  >
+                    ♡ {post.likes}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="quiz-history">
+            {completedQuizzes.length === 0 ? (
+              <div className="empty-state">
+                <p>Вы еще не прошли ни одной викторины</p>
+                <Link to="/quizzes" className="primary-button">
+                  Найти викторину
+                </Link>
+              </div>
+            ) : (
+              <div className="quizzes-grid">
+                {(() => {
+                  // Создаем объект для группировки попыток
+                  const attemptsByQuiz = {};
+                  
+                  // Группируем все попытки по ID викторины
+                  completedQuizzes.forEach(quiz => {
+                    if (!attemptsByQuiz[quiz.quizId]) {
+                      attemptsByQuiz[quiz.quizId] = [];
+                    }
+                    attemptsByQuiz[quiz.quizId].push(quiz);
+                  });
+
+                  // Выводим только последнюю попытку для каждой викторины
+                  return Object.entries(attemptsByQuiz).map(([quizId, attempts]) => {
+                    // Берем только последнюю попытку (первый элемент в массиве, так как они уже отсортированы)
+                    const latestAttempt = attempts[0];
+                    const isPersonalityQuiz = latestAttempt.personalityResult;
+                    
+                    // Для обычных викторин считаем процент
+                    const percentage = !isPersonalityQuiz ? 
+                      Math.round((latestAttempt.score / latestAttempt.totalQuestions) * 100) : null;
+                    const isSuccess = !isPersonalityQuiz ? percentage >= 100 : true;
+                    
+                    // Получаем текстовый результат для викторины типа PERSONALITY
+                    const personalityResultText = isPersonalityQuiz ? 
+                      (typeof latestAttempt.personalityResult === 'object' ? 
+                        latestAttempt.personalityResult.title || 'Результат не определен' : 
+                        String(latestAttempt.personalityResult)) : '';
+
+                    console.log('Personality Result:', latestAttempt.personalityResult);
+                    
+                    return (
+                      <div key={quizId} className="quiz-attempts-group">
+                        <h3>{latestAttempt.quizTitle}</h3>
+                        <div className={`quiz-card ${!isPersonalityQuiz ? (isSuccess ? 'success' : 'failure') : 'personality'}`}>
+                          <div className="attempt-header">
+                            <div className="attempt-number">
+                              Последняя попытка
+                              {!isPersonalityQuiz && (
+                                <span className={`attempt-status ${isSuccess ? 'success' : 'failure'}`}>
+                                  {isSuccess ? ' ✓' : ' ✗'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="attempt-date">
+                              {latestAttempt.endTime ? new Date(latestAttempt.endTime).toLocaleDateString('ru-RU', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : 'Дата не указана'}
+                            </div>
+                          </div>
+                          <div className="quiz-stats">
+                            {isPersonalityQuiz ? (
+                              <div className="personality-result">
+                                <span>Ваш результат:</span>
+                                <span className="personality-type">{personalityResultText}</span>
+                                {typeof latestAttempt.personalityResult === 'object' && latestAttempt.personalityResult.description && (
+                                  <span className="personality-description">
+                                    {latestAttempt.personalityResult.description}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <>
+                                <span className={isSuccess ? 'success' : 'failure'}>
+                                  Результат: {latestAttempt.score}/{latestAttempt.totalQuestions}
+                                </span>
+                                <span className={isSuccess ? 'success' : 'failure'}>
+                                  Процент: {percentage}%
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          <div className="quiz-meta">
+                            <span>Время: {formatTime(latestAttempt.timeSpent)}</span>
+                          </div>
+                          <div className="quiz-actions">
+                            <Link to={`/quiz/${latestAttempt.quizId}`} className="retry-link">
+                              Пройти снова
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
           </div>
         )}
       </div>

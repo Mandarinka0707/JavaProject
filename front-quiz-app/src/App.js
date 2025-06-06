@@ -12,8 +12,11 @@ import ProfilePage from './components/Profile/ProfilePage';
 import CreateQuizForm from './components/CreateQuiz/CreateQuizForm';
 import ProtectedRoute from './components/ProtectedRoute';
 import FriendFeedPage from './components/FriendFeedPage';
+import FriendsPage from './components/FriendsPage';
 import MyQuizzes from './components/Quiz/MyQuizzes';
 import { createQuiz, getQuizzes } from './services/quizService';
+import { API_URL, API_ENDPOINTS } from './config';
+import { getFriends } from './services/friendService';
 
 const categories = [
   { id: 1, title: "Кино", tags: ["фильмы", "актеры", "награды"] },
@@ -26,62 +29,6 @@ const filterByCategory = (quizzes, categoryId) => {
   return quizzes.filter(quiz => quiz.categoryId === parseInt(categoryId));
 };
 
-const initialQuizzes = [
-  {
-    id: 1,
-    title: "Столицы мира",
-    description: "Проверьте свои знания географии",
-    difficulty: "средний",
-    categoryId: 1,
-    category: "Кино",
-    tags: ["география", "столицы"],
-    rating: 4.5,
-    ratingCount: 15,
-    time: 5,
-    timeLimit: 30,
-    progress: 0,
-    questions: [
-      {
-        question: "Столица Франции?",
-        options: ["Лондон", "Берлин", "Париж", "Мадрид"],
-        correctIndex: 2
-      },
-      {
-        question: "Столица Германии?",
-        options: ["Мюнхен", "Берлин", "Гамбург", "Франкфурт"],
-        correctIndex: 1
-      }
-    ],
-    author: "system"
-  }
-];
-
-const initialFriends = [
-  { id: 101, name: 'Алексей Петров', avatar: '', isOnline: true, lastSeen: '2 часа назад' },
-  { id: 102, name: 'Мария Иванова', avatar: '', isOnline: false, lastSeen: '5 часов назад' }
-];
-
-const initialFriendActivity = [
-  {
-    id: 1,
-    friend: initialFriends[0],
-    quizTitle: 'Столицы мира',
-    score: 8,
-    total: 10,
-    date: new Date().toISOString(),
-    quizId: 1
-  },
-  {
-    id: 2,
-    friend: initialFriends[1],
-    quizTitle: 'Столицы мира',
-    score: 12,
-    total: 15,
-    date: new Date().toISOString(),
-    quizId: 2
-  }
-];
-
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [allQuizzes, setAllQuizzes] = useState([]);
@@ -90,20 +37,73 @@ function App() {
   const [friendActivity, setFriendActivity] = useState([]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setIsAuthenticated(true);
-      loadQuizzes();
-    }
+    const checkAuth = () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        // Проверяем валидность токена
+        fetch(`${API_URL}${API_ENDPOINTS.AUTH.VALIDATE}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token.trim()}`,
+            'Accept': 'application/json'
+          }
+        })
+        .then(response => {
+          if (response.ok) {
+            setIsAuthenticated(true);
+            // Загружаем данные друзей после успешной авторизации
+            loadFriendsData();
+          } else {
+            localStorage.removeItem('token');
+            setIsAuthenticated(false);
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('token');
+          setIsAuthenticated(false);
+        });
+      } else {
+        setIsAuthenticated(false);
+      }
+    };
+
+    checkAuth();
+    loadQuizzes();
   }, []);
+
+  const loadFriendsData = async () => {
+    try {
+      const friendsData = await getFriends();
+      setFriends(friendsData);
+      
+      // Загружаем активность друзей (последние результаты викторин)
+      const friendsActivity = friendsData.map(friend => ({
+        id: Date.now(),
+        friend: friend,
+        quizTitle: 'Последняя активность',
+        date: new Date().toISOString()
+      }));
+      setFriendActivity(friendsActivity);
+    } catch (error) {
+      console.error('Error loading friends data:', error);
+    }
+  };
 
   const loadQuizzes = async () => {
     try {
+      console.log('App - Starting to load quizzes');
+      setAllQuizzes([]); // Clear existing quizzes while loading
       const quizzes = await getQuizzes();
-      console.log('Получены все викторины:', quizzes);
-      setAllQuizzes(quizzes);
+      console.log('App - Quizzes loaded:', quizzes);
+      if (Array.isArray(quizzes)) {
+        setAllQuizzes(quizzes);
+      } else {
+        console.error('App - Received non-array quizzes:', quizzes);
+        setAllQuizzes([]);
+      }
     } catch (error) {
-      console.error('Ошибка при загрузке викторин:', error);
+      console.error('App - Error loading quizzes:', error);
+      setAllQuizzes([]);
     }
   };
 
@@ -127,6 +127,12 @@ function App() {
     setPublishedResults(prev => [newResult, ...prev]);
   };
 
+  // Add a function to reload quizzes
+  const reloadQuizzes = () => {
+    console.log('App - Reloading quizzes');
+    loadQuizzes();
+  };
+
   return (
     <Router>
       <div className="app">
@@ -139,15 +145,15 @@ function App() {
           <Route path="/" element={<StartPage />} />
           <Route 
             path="/quizzes" 
-            element={<QuizListPage quizzes={allQuizzes} categories={categories} />} 
+            element={<QuizListPage quizzes={allQuizzes} categories={categories} onReload={reloadQuizzes} />} 
           />
           <Route 
             path="/quizzes/:categoryId"
-            element={<QuizListPage quizzes={allQuizzes} categories={categories} filterByCategory={filterByCategory} />}
+            element={<QuizListPage quizzes={allQuizzes} categories={categories} filterByCategory={filterByCategory} onReload={reloadQuizzes} />}
           />
           <Route 
             path="/quiz/:id" 
-            element={<Quiz quizzes={allQuizzes} />} 
+            element={<Quiz quizzes={allQuizzes} onReload={reloadQuizzes} />} 
           />
           <Route 
             path="/results" 
@@ -168,6 +174,22 @@ function App() {
           <Route
             path="/rating"
             element={<RatingPage quizzes={allQuizzes} />}
+          />
+          <Route
+            path="/friends"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <FriendsPage friends={friends} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/friend-feed"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <FriendFeedPage activities={friendActivity} />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/profile"
@@ -192,17 +214,6 @@ function App() {
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <MyQuizzes />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/friend-feed"
-            element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
-                <FriendFeedPage
-                  friends={friends}
-                  friendActivity={friendActivity}
-                />
               </ProtectedRoute>
             }
           />

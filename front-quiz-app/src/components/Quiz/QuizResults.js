@@ -1,9 +1,77 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import axios from '../../services/axiosConfig';
 import '../../styles/styles.css';
 
-const QuizResults = ({ results, quizType }) => {
-  if (!results) return null;
+const QuizResults = ({ results, quizType, quizTitle }) => {
+  const [isPublished, setIsPublished] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState(null);
+
+  if (!results) {
+    console.error('No results provided to QuizResults component');
+    return null;
+  }
+
+  console.log('QuizResults component received:', { results, quizType, quizTitle });
+
+  const handlePublish = async () => {
+    try {
+      setPublishing(true);
+      setError(null);
+      
+      // Логируем входные данные
+      console.log('Publishing results:', {
+        results,
+        quizType,
+        quizTitle
+      });
+
+      const feedItem = {
+        quizId: results.quizId,
+        quizTitle: quizTitle || results.quizTitle,
+        quizType: quizType || 'STANDARD',
+        completedAt: new Date().toISOString(),
+        score: results.score || 0,
+        totalQuestions: results.totalQuestions || 0,
+        timeSpent: results.timeSpent || 0,
+        position: results.position || null,
+        character: results.character || null,
+        description: results.description || null,
+        image: results.image || null,
+        traits: results.traits || {}
+      };
+
+      console.log('Sending feed item to backend:', feedItem);
+
+      const response = await axios.post('/api/profile/feed/publish', feedItem, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      
+      console.log('Server response:', response);
+      
+      if (response.status === 200) {
+        setIsPublished(true);
+        console.log('Publication successful, redirecting to feed...');
+        setTimeout(() => {
+          window.location.href = '/profile/feed';
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error publishing results:', error);
+      console.error('Error response:', error.response);
+      console.error('Error details:', error.response?.data);
+      
+      const errorMessage = error.response?.data?.error || 
+                          'Не удалось опубликовать результат. Пожалуйста, попробуйте снова.';
+      setError(errorMessage);
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   if (quizType === 'PERSONALITY') {
     const { character, traits, description, image } = results;
@@ -26,7 +94,7 @@ const QuizResults = ({ results, quizType }) => {
         <div className="character-traits">
           <h3>Ваши характеристики:</h3>
           <div className="traits-grid">
-            {Object.entries(traits).map(([trait, value]) => (
+            {Object.entries(traits || {}).map(([trait, value]) => (
               <div key={trait} className="trait-item">
                 <div className="trait-name">{trait}</div>
                 <div className="trait-bar">
@@ -41,6 +109,12 @@ const QuizResults = ({ results, quizType }) => {
           </div>
         </div>
 
+        {error && (
+          <div className="error-message" style={{ color: 'red', marginTop: '1rem' }}>
+            {error}
+          </div>
+        )}
+
         <div className="results-actions">
           <Link to="/quizzes" className="results-button secondary">
             Другие тесты
@@ -50,6 +124,13 @@ const QuizResults = ({ results, quizType }) => {
             className="results-button primary"
           >
             Пройти заново
+          </button>
+          <button
+            onClick={handlePublish}
+            disabled={isPublished || publishing}
+            className={`results-button ${isPublished ? 'published' : 'publish'}`}
+          >
+            {publishing ? 'Публикация...' : isPublished ? 'Опубликовано' : 'Опубликовать результат'}
           </button>
         </div>
       </div>
@@ -77,6 +158,12 @@ const QuizResults = ({ results, quizType }) => {
         )}
       </div>
 
+      {error && (
+        <div className="error-message" style={{ color: 'red', marginTop: '1rem' }}>
+          {error}
+        </div>
+      )}
+
       <div className="results-actions">
         <Link to="/quizzes" className="results-button secondary">
           К списку викторин
@@ -86,6 +173,13 @@ const QuizResults = ({ results, quizType }) => {
           className="results-button primary"
         >
           Попробовать снова
+        </button>
+        <button
+          onClick={handlePublish}
+          disabled={isPublished || publishing}
+          className={`results-button ${isPublished ? 'published' : 'publish'}`}
+        >
+          {publishing ? 'Публикация...' : isPublished ? 'Опубликовано' : 'Опубликовать результат'}
         </button>
       </div>
     </div>

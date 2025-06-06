@@ -1,192 +1,226 @@
-const API_URL = 'http://localhost:8080/api';
+import { API_URL, API_ENDPOINTS } from '../config';
+import { getAuthHeaders } from './authService';
 
 export const createQuiz = async (quizData) => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        throw new Error('Не авторизован');
-    }
-
     try {
         const endpoint = quizData.quizType === 'PERSONALITY' ? 
-            `${API_URL}/quizzes/personality` : 
-            `${API_URL}/quizzes`;
+            `${API_URL}${API_ENDPOINTS.QUIZ.CREATE_PERSONALITY}` : 
+            `${API_URL}${API_ENDPOINTS.QUIZ.CREATE}`;
+
+        console.log('Sending quiz data:', JSON.stringify(quizData, null, 2));
 
         const response = await fetch(endpoint, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify(quizData)
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            console.error('Server error:', errorData);
-            throw new Error(errorData?.message || 'Ошибка при создании викторины');
+            if (response.status === 401) {
+                throw new Error('Сессия истекла');
+            }
+
+            const responseText = await response.text();
+            console.error('Server error response:', {
+                status: response.status,
+                statusText: response.statusText,
+                body: responseText
+            });
+
+            let errorMessage = 'Ошибка при создании викторины';
+            try {
+                const errorData = JSON.parse(responseText);
+                if (errorData?.message) {
+                    errorMessage = errorData.message;
+                }
+            } catch (e) {
+                console.error('Error parsing error response:', e);
+                if (response.status === 403) {
+                    errorMessage = 'У вас нет прав для создания викторины';
+                }
+            }
+            throw new Error(errorMessage);
         }
 
         return await response.json();
     } catch (error) {
-        console.error('Ошибка:', error);
+        console.error('Error creating quiz:', error);
         throw error;
     }
 };
 
 export const getQuizzes = async () => {
     try {
-        const headers = {
-            'Accept': 'application/json'
-        };
-
-        // Добавляем токен в заголовки, если он есть
-        const token = localStorage.getItem('token');
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const response = await fetch(`${API_URL}/quizzes`, {
-            headers: headers
-        });
-
-        console.log('Quiz request response:', {
-            status: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries(response.headers.entries())
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.QUIZ.LIST}`, {
+            headers: {
+                'Accept': 'application/json'
+            }
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Error response text:', errorText);
+            if (!errorText) {
+                throw new Error('Ошибка при получении викторин');
+            }
             
             try {
                 const errorData = JSON.parse(errorText);
                 throw new Error(errorData?.message || 'Ошибка при получении викторин');
             } catch (parseError) {
-                console.error('Error parsing error response:', parseError);
-                throw new Error(`Ошибка при получении викторин: ${errorText}`);
+                throw new Error('Ошибка при получении викторин');
             }
         }
 
         const data = await response.json();
-        console.log('Quiz data received:', data);
         return data;
     } catch (error) {
-        console.error('Detailed error:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack
-        });
+        console.error('Error fetching quizzes:', error);
         throw error;
     }
 };
 
 export const getMyQuizzes = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        throw new Error('Не авторизован');
-    }
-
     try {
-        const response = await fetch(`${API_URL}/quizzes/my`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
-            }
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.QUIZ.MY}`, {
+            headers: getAuthHeaders()
         });
 
         if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error('Сессия истекла');
+            }
             const errorData = await response.json().catch(() => null);
-            console.error('Server error:', errorData);
             throw new Error(errorData?.message || 'Ошибка при получении ваших викторин');
         }
 
-        const data = await response.json();
-        console.log('Ответ от сервера (мои викторины):', {
-            status: response.status,
-            headers: Object.fromEntries(response.headers.entries()),
-            data: data
-        });
-        return data;
+        return await response.json();
     } catch (error) {
-        console.error('Ошибка:', error);
+        console.error('Error fetching user quizzes:', error);
         throw error;
     }
 };
 
-// Начать попытку прохождения викторины
 export const startQuizAttempt = async (quizId) => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        throw new Error('Не авторизован');
-    }
-
     try {
-        const response = await fetch(`${API_URL}/quiz-attempts/start/${quizId}`, {
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.QUIZ.ATTEMPT.START}/${quizId}`, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+            headers: getAuthHeaders()
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            if (!errorText) {
+                throw new Error('Не удалось начать викторину');
             }
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            throw new Error(errorData?.message || 'Ошибка при начале викторины');
+            
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData?.message || 'Не удалось начать викторину');
+            } catch (parseError) {
+                throw new Error('Не удалось начать викторину');
+            }
         }
 
         return await response.json();
     } catch (error) {
-        console.error('Ошибка при начале викторины:', error);
+        console.error('Error starting quiz:', error);
         throw error;
     }
 };
 
-// Отправить ответы на викторину
-export const submitQuizAttempt = async (attemptData) => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        throw new Error('Не авторизован');
-    }
-
+export const getActiveAttempt = async (quizId) => {
     try {
-        const response = await fetch(`${API_URL}/quiz-attempts/submit`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(attemptData)
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.QUIZ.ATTEMPT.ACTIVE}/${quizId}`, {
+            headers: getAuthHeaders()
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            throw new Error(errorData?.message || 'Ошибка при отправке ответов');
+        if (response.status === 404) {
+            return null;
         }
 
-        return await response.json();
+        if (!response.ok) {
+            const errorText = await response.text();
+            if (!errorText) {
+                throw new Error('Ошибка при получении активной попытки');
+            }
+            
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData?.message || 'Ошибка при получении активной попытки');
+            } catch (parseError) {
+                throw new Error('Ошибка при получении активной попытки');
+            }
+        }
+
+        const data = await response.json();
+        if (!data || !data.attemptId) {
+            return null;
+        }
+
+        return {
+            id: data.attemptId,
+            startTime: data.startTime,
+            timeSpent: data.timeSpent || 0,
+            answers: data.answers || {},
+            currentQuestion: data.currentQuestion || 0,
+            score: data.score || 0,
+            isCompleted: data.isCompleted || false
+        };
     } catch (error) {
-        console.error('Ошибка при отправке ответов:', error);
+        console.error('Error checking active attempt:', error);
         throw error;
     }
 };
 
-// Получить историю попыток прохождения викторин
+export const submitQuizAttempt = async ({ quizId, attemptId, answers, timeSpent }) => {
+    try {
+        if (!timeSpent || isNaN(timeSpent) || timeSpent < 0) {
+            timeSpent = 1;
+        }
+
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.QUIZ.ATTEMPT.SUBMIT}`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                quizId,
+                attemptId,
+                answers,
+                timeSpent: Math.floor(timeSpent)
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            if (!errorText) {
+                throw new Error('Ошибка при отправке ответов');
+            }
+            
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData?.message || 'Ошибка при отправке ответов');
+            } catch (parseError) {
+                throw new Error('Ошибка при отправке ответов');
+            }
+        }
+
+        const result = await response.json();
+        return result.result || result;
+    } catch (error) {
+        console.error('Error submitting quiz attempt:', error);
+        throw error;
+    }
+};
+
 export const getQuizAttempts = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        throw new Error('Не авторизован');
-    }
-
     try {
-        const response = await fetch(`${API_URL}/quiz-attempts/my`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
-            }
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.QUIZ.ATTEMPT.MY}`, {
+            headers: getAuthHeaders()
         });
 
         if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error('Сессия истекла');
+            }
             const errorData = await response.json().catch(() => null);
             throw new Error(errorData?.message || 'Ошибка при получении истории попыток');
         }
@@ -198,48 +232,24 @@ export const getQuizAttempts = async () => {
     }
 };
 
-// Получить пройденные викторины (только лучшие попытки)
 export const getCompletedQuizzes = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        throw new Error('Не авторизован');
-    }
-
     try {
-        const response = await fetch(`${API_URL}/quiz-attempts/my`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
-            }
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.QUIZ.ATTEMPT.MY}`, {
+            headers: getAuthHeaders()
         });
 
         if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error('Сессия истекла');
+            }
             const errorData = await response.json().catch(() => null);
             throw new Error(errorData?.message || 'Ошибка при получении пройденных викторин');
         }
 
         const attempts = await response.json();
-        
-        // Фильтруем только завершенные попытки
-        const completedAttempts = attempts.filter(attempt => attempt.isCompleted);
-        
-        // Группируем попытки по quizId и находим лучшую для каждой викторины
-        const bestAttempts = completedAttempts.reduce((acc, attempt) => {
-            const existingAttempt = acc[attempt.quizId];
-            
-            // Если это первая попытка для этой викторины или результат лучше предыдущего
-            if (!existingAttempt || 
-                (attempt.score / attempt.totalQuestions) > (existingAttempt.score / existingAttempt.totalQuestions) ||
-                ((attempt.score / attempt.totalQuestions) === (existingAttempt.score / existingAttempt.totalQuestions) && 
-                 attempt.timeSpent < existingAttempt.timeSpent)) {
-                acc[attempt.quizId] = attempt;
-            }
-            
-            return acc;
-        }, {});
-
-        // Преобразуем объект обратно в массив
-        return Object.values(bestAttempts);
+        return attempts
+            .filter(attempt => attempt.isCompleted)
+            .sort((a, b) => new Date(b.endTime) - new Date(a.endTime));
     } catch (error) {
         console.error('Ошибка при получении пройденных викторин:', error);
         throw error;

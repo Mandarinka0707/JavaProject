@@ -41,28 +41,24 @@ const Results = ({ onPublishResult }) => {
     position,
     answers,
     personalityResult, // Результат для personality quiz
-    quizType // Тип викторины
+    quizType, // Тип викторины
+    quiz // Добавленный quiz для доступа к вопросам
   } = location.state || {};
 
-  const handlePublish = () => {
-    if (onPublishResult) {
-      onPublishResult({
-        quizId,
-        score,
-        total,
-        title: quizTitle,
-        timeSpent,
-        position,
-        date: new Date().toISOString(),
-        personalityResult
-      });
-    }
-    navigate('/profile');
+  const getScoreMessage = (score, total) => {
+    if (!score || !total || isNaN(score) || isNaN(total)) return 'Попробуйте еще раз! 🔄';
+    const percentage = (score / total) * 100;
+    if (percentage === 100) return 'Отлично! Идеальный результат! 🎉';
+    if (percentage >= 80) return 'Очень хороший результат! 👏';
+    if (percentage >= 60) return 'Неплохой результат! 👍';
+    if (percentage >= 40) return 'Есть куда расти! 💪';
+    return 'Попробуйте еще раз! 🔄';
   };
 
   const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0м 0с';
     const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
+    const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}м ${remainingSeconds}с`;
   };
 
@@ -74,13 +70,17 @@ const Results = ({ onPublishResult }) => {
     return `${pos}-е`;
   };
 
-  const getScoreMessage = (score, total) => {
-    const percentage = (score / total) * 100;
-    if (percentage === 100) return 'Отлично! Идеальный результат! 🎉';
-    if (percentage >= 80) return 'Очень хороший результат! 👏';
-    if (percentage >= 60) return 'Неплохой результат! 👍';
-    if (percentage >= 40) return 'Есть куда расти! 💪';
-    return 'Попробуйте еще раз! 🔄';
+  const handlePublish = () => {
+    if (onPublishResult) {
+      onPublishResult({
+        quizId,
+        score,
+        total,
+        timeSpent,
+        position,
+        quizTitle
+      });
+    }
   };
 
   if (!location.state) {
@@ -160,9 +160,9 @@ const Results = ({ onPublishResult }) => {
       </div>
       
       <div className="results-score">
-        {score} / {total}
+        {score || 0} / {total || 0}
         <span className="score-percentage">
-          ({Math.round((score / total) * 100)}%)
+          ({Math.round(((score || 0) / (total || 1)) * 100)}%)
         </span>
       </div>
 
@@ -170,27 +170,30 @@ const Results = ({ onPublishResult }) => {
         <p>
           <strong>Затраченное время:</strong> {formatTime(timeSpent)}
         </p>
-        <p>
+        {/* <p>
           <strong>Место в рейтинге:</strong> {formatPosition(position)}
-        </p>
+        </p> */}
       </div>
 
       {answers && (
         <div className="answer-review">
           <h3>Обзор ответов</h3>
-          {Object.entries(answers).map(([questionIndex, isCorrect]) => (
-            <div 
-              key={questionIndex} 
-              className={`answer-item ${isCorrect ? 'correct' : 'incorrect'}`}
-            >
-              <div className="answer-details">
-                <span>Вопрос {Number(questionIndex) + 1}</span>
-                <span className={`answer-status ${isCorrect ? 'correct' : 'incorrect'}`}>
-                  {isCorrect ? '✓ Верно' : '✗ Неверно'}
-                </span>
+          {Object.entries(answers).map(([questionIndex, selectedAnswer]) => {
+            const isCorrect = quiz?.questions?.[questionIndex]?.correctIndex === selectedAnswer;
+            return (
+              <div 
+                key={questionIndex} 
+                className={`answer-item ${isCorrect ? 'correct' : 'incorrect'}`}
+              >
+                <div className="answer-details">
+                  <span>Вопрос {Number(questionIndex) + 1}</span>
+                  <span className={`answer-status ${isCorrect ? 'correct' : 'incorrect'}`}>
+                    {isCorrect ? '✓ Верно' : '✗ Неверно'}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

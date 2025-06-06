@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_URL, API_ENDPOINTS } from '../../config';
 import '../../styles/styles.css';
 
 const LoginPage = ({ setIsAuthenticated }) => {
@@ -22,10 +23,11 @@ const LoginPage = ({ setIsAuthenticated }) => {
     setError(''); // Очищаем предыдущие ошибки
     
     try {
-      const response = await fetch('http://localhost:8080/auth/login', {
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.AUTH.LOGIN}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({ username, password }),
       });
@@ -33,8 +35,10 @@ const LoginPage = ({ setIsAuthenticated }) => {
       const data = await response.json();
 
       if (response.ok) {
-        // Сохраняем токен в localStorage
+        console.log('Login response:', data);
+        // Сохраняем токен и ID пользователя в localStorage
         localStorage.setItem('token', data.token);
+        localStorage.setItem('userId', data.userId);
         // Устанавливаем состояние аутентификации
         setIsAuthenticated(true);
         // Добавляем небольшую задержку перед редиректом
@@ -47,7 +51,7 @@ const LoginPage = ({ setIsAuthenticated }) => {
       }
     } catch (error) {
       setError('Ошибка сервера. Пожалуйста, попробуйте позже.');
-      console.error('Error during login:', error);
+      console.error('Login failed:', error);
     }
   };
 

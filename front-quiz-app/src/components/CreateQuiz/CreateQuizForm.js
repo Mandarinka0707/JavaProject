@@ -1,13 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createQuiz } from '../../services/quizService';
+import { API_URL, API_ENDPOINTS } from '../../config';
 import '../../styles/styles.css';
 
 const CreateQuizForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentTag, setCurrentTag] = useState('');
   
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login', { 
+        state: { 
+          from: '/create-quiz',
+          message: 'Пожалуйста, войдите в систему для создания викторины' 
+        } 
+      });
+      return;
+    }
+
+    // Проверяем валидность токена
+    const checkToken = async () => {
+      try {
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.AUTH.VALIDATE}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token.trim()}`
+          }
+        });
+        
+        if (!response.ok) {
+          localStorage.removeItem('token');
+          navigate('/login', { 
+            state: { 
+              from: '/create-quiz',
+              message: 'Ваша сессия истекла. Пожалуйста, войдите снова.' 
+            } 
+          });
+        }
+      } catch (error) {
+        console.error('Error checking token:', error);
+      }
+    };
+
+    checkToken();
+  }, [navigate]);
+
   const [quizData, setQuizData] = useState({
     title: '',
     description: '',
@@ -16,12 +57,14 @@ const CreateQuizForm = () => {
     quizType: 'STANDARD',
     timeDuration: 30,
     isPublic: true,
+    tags: [],
     questions: [{
       question: '',
       image: '',
+      correctIndex: 0,
       options: [
-        { content: '', traits: { resultIndex: null } },
-        { content: '', traits: { resultIndex: null } }
+        { content: '', type: 'TEXT', traits: { resultIndex: null } },
+        { content: '', type: 'TEXT', traits: { resultIndex: null } }
       ]
     }],
     results: []
@@ -33,6 +76,26 @@ const CreateQuizForm = () => {
     image: '' // URL изображения персонажа
   });
 
+  const handleTagAdd = (e) => {
+    e.preventDefault();
+    if (currentTag.trim()) {
+      if (!quizData.tags.includes(currentTag.trim())) {
+        setQuizData({
+          ...quizData,
+          tags: [...quizData.tags, currentTag.trim()]
+        });
+      }
+      setCurrentTag('');
+    }
+  };
+
+  const handleTagRemove = (tagToRemove) => {
+    setQuizData({
+      ...quizData,
+      tags: quizData.tags.filter(tag => tag !== tagToRemove)
+    });
+  };
+
   const handleQuizTypeChange = (e) => {
     const type = e.target.value;
     setQuizData({
@@ -43,9 +106,10 @@ const CreateQuizForm = () => {
       questions: [{
         question: '',
         image: '',
+        correctIndex: 0,
         options: [
-          { content: '', traits: { resultIndex: null } },
-          { content: '', traits: { resultIndex: null } }
+          { content: '', type: 'TEXT', traits: { resultIndex: null } },
+          { content: '', type: 'TEXT', traits: { resultIndex: null } }
         ]
       }],
       results: []
@@ -74,21 +138,38 @@ const CreateQuizForm = () => {
     const updatedOptions = [...currentQuestion.options];
     
     if (field === 'resultIndex') {
-      updatedOptions[index] = {
-        ...updatedOptions[index],
-        content: updatedOptions[index].content,
-        traits: {
-          resultIndex: value === '' ? null : parseInt(value)
+        const parsedValue = value === '' ? null : parseInt(value, 10);
+        if (value !== '' && (isNaN(parsedValue) || parsedValue < 0)) {
+            return; // Ignore invalid values
         }
-      };
+        updatedOptions[index] = {
+            ...updatedOptions[index],
+            content: updatedOptions[index].content,
+            type: 'TEXT',
+            traits: {
+                resultIndex: parsedValue
+            }
+        };
     } else {
-      updatedOptions[index] = {
-        ...updatedOptions[index],
-        [field]: value
-      };
+        updatedOptions[index] = {
+            ...updatedOptions[index],
+            [field]: value,
+            type: 'TEXT'
+        };
     }
     
     currentQuestion.options = updatedOptions;
+    
+    setQuizData({
+        ...quizData,
+        questions: updatedQuestions
+    });
+  };
+
+  const handleCorrectAnswerChange = (index) => {
+    const updatedQuestions = [...quizData.questions];
+    const currentQuestion = updatedQuestions[updatedQuestions.length - 1];
+    currentQuestion.correctIndex = index;
     
     setQuizData({
       ...quizData,
@@ -145,9 +226,10 @@ const CreateQuizForm = () => {
         {
           question: '',
           image: '',
+          correctIndex: 0,
           options: [
-            { content: '', traits: { resultIndex: null } },
-            { content: '', traits: { resultIndex: null } }
+            { content: '', type: 'TEXT', traits: { resultIndex: null } },
+            { content: '', type: 'TEXT', traits: { resultIndex: null } }
           ]
         }
       ]
@@ -158,7 +240,7 @@ const CreateQuizForm = () => {
     const updatedQuestions = [...quizData.questions];
     const currentQuestion = updatedQuestions[updatedQuestions.length - 1];
     
-    currentQuestion.options.push({ content: '', traits: { resultIndex: null } });
+    currentQuestion.options.push({ content: '', type: 'TEXT', traits: { resultIndex: null } });
     
     setQuizData({
       ...quizData,
@@ -203,9 +285,14 @@ const CreateQuizForm = () => {
       }
 
       // Подготавливаем данные для отправки
+      const timeDuration = parseInt(quizData.timeDuration, 10);
+      if (isNaN(timeDuration) || timeDuration <= 0) {
+        throw new Error('Укажите корректное время прохождения викторины');
+      }
+
       const dataToSend = {
         ...quizData,
-        timeDuration: parseInt(quizData.timeDuration) || 30,
+        timeDuration: timeDuration,
         difficulty: quizData.difficulty || 'EASY'
       };
 
@@ -242,6 +329,47 @@ const CreateQuizForm = () => {
             onChange={(e) => setQuizData({ ...quizData, description: e.target.value })}
             required
           />
+        </div>
+
+        <div className="form-group">
+          <label>Теги</label>
+          <div className="tags-input-container">
+            <div className="tags-list">
+              {quizData.tags.map((tag, index) => (
+                <span key={index} className="tag">
+                  {tag}
+                  <button
+                    type="button"
+                    className="remove-tag"
+                    onClick={() => handleTagRemove(tag)}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="tag-input-wrapper">
+              <input
+                type="text"
+                value={currentTag}
+                onChange={(e) => setCurrentTag(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleTagAdd(e);
+                  }
+                }}
+                placeholder="Добавьте тег и нажмите Enter"
+              />
+              <button
+                type="button"
+                onClick={handleTagAdd}
+                className="add-tag-button"
+              >
+                Добавить тег
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="form-group">
@@ -389,24 +517,54 @@ const CreateQuizForm = () => {
               />
             </div>
 
-            <div className="options-section">
-              <h3>Варианты ответов</h3>
+            <div className="form-group">
+              <h3>Варианты ответов:</h3>
               {quizData.questions[quizData.questions.length - 1].options.map((option, index) => (
-                <div key={index} className="option-group">
+                <div key={index} className="option-container">
                   <input
                     type="text"
                     value={option.content}
                     onChange={(e) => handleOptionChange(index, 'content', e.target.value)}
-                    placeholder={`Вариант ${index + 1}`}
+                    placeholder={`Вариант ответа ${index + 1}`}
+                    required
                   />
                   
+                  <input
+                    type="url"
+                    value={option.image || ''}
+                    onChange={(e) => handleOptionChange(index, 'image', e.target.value)}
+                    placeholder="URL изображения (необязательно)"
+                  />
+                  
+                  {option.image && (
+                    <img 
+                      src={option.image} 
+                      alt={`Предпросмотр варианта ${index + 1}`}
+                      className="option-image-preview"
+                      style={{ maxWidth: '100px', height: 'auto', marginTop: '5px' }}
+                    />
+                  )}
+                  
+                  {quizData.quizType === 'STANDARD' && (
+                    <div className="correct-answer-selector">
+                      <input
+                        type="radio"
+                        name="correctAnswer"
+                        checked={quizData.questions[quizData.questions.length - 1].correctIndex === index}
+                        onChange={() => handleCorrectAnswerChange(index)}
+                      />
+                      <label>Правильный ответ</label>
+                    </div>
+                  )}
+
                   {quizData.quizType === 'PERSONALITY' && (
                     <select
-                      value={option.traits?.resultIndex ?? ''}
+                      value={option.traits?.resultIndex === null ? '' : option.traits.resultIndex}
                       onChange={(e) => handleOptionChange(index, 'resultIndex', e.target.value)}
-                      required
+                      required={quizData.quizType === 'PERSONALITY'}
+                      className="personality-select"
                     >
-                      <option value="">Выберите персонажа</option>
+                      <option value="" disabled>Выберите персонажа</option>
                       {quizData.results.map((result, idx) => (
                         <option key={idx} value={idx}>{result.title}</option>
                       ))}
@@ -414,13 +572,8 @@ const CreateQuizForm = () => {
                   )}
                 </div>
               ))}
-              
-              <button
-                type="button"
-                onClick={addOptionToCurrentQuestion}
-                className="add-button"
-              >
-                Добавить вариант
+              <button type="button" onClick={addOptionToCurrentQuestion}>
+                Добавить вариант ответа
               </button>
             </div>
 
